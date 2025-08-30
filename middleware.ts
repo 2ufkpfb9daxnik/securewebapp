@@ -1,12 +1,12 @@
     import NextAuth from "next-auth";
     import { authConfig } from "./auth.config";
 
-    // Initialize NextAuth with the configuration and export the auth middleware.
+    // NextAuthの初期化と認証ミドルウェアのエクスポート
     export default NextAuth(authConfig).auth;
 
     export const config = {
-      // The matcher specifies which routes the middleware should apply to.
-      // Here, it protects the dashboard and any of its sub-routes.
+      // matcherはミドルウェアが適用されるルートを指定
+      // ダッシュボードとそのサブルートを保護
       matcher: ["/dashboard/:path*"],
     };
     

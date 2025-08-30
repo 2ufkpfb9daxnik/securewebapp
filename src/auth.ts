@@ -7,7 +7,7 @@ import { headers } from "next/headers";
 
 const prisma = new PrismaClient();
 
-// Security constants
+// セキュリティ設定
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_TIME_MINUTES = 15;
 const LOGIN_INTERVAL_SECONDS = 2;
@@ -32,35 +32,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = await prisma.user.findUnique({ where: { email } });
 
         if (!user) {
-            return null; // User not found
+            return null; // ユーザーが見つかりません
         }
 
-        // 1. Check for account lock
+        // 1. アカウントのロックを確認
         if (user.lockUntil && user.lockUntil > new Date()) {
-            throw new Error(`Account locked. Try again after ${LOCKOUT_TIME_MINUTES} minutes.`);
+            console.log(`Account locked for user ${email}, locked until: ${user.lockUntil}`);
+            // セキュリティ上、ロック状態は表示せず一般的なエラーメッセージを返す
+            return null;
         }
 
-        // 2. Check login interval
+        // 2. ログイン間隔を確認
         const now = new Date();
         if (user.lastLoginAttemptAt && (now.getTime() - user.lastLoginAttemptAt.getTime()) < LOGIN_INTERVAL_SECONDS * 1000) {
+            console.log(`Rate limit exceeded for user ${email}`);
             await prisma.user.update({
             where: { id: user.id },
             data: { lastLoginAttemptAt: now },
             });
-            throw new Error("Too many login attempts. Please wait a moment.");
+            // セキュリティ上、レート制限も表示せず一般的なエラーメッセージを返す
+            return null;
         }
         
-        // Update last attempt time before checking password
+        // パスワード確認前に最後の試行時間を更新
         await prisma.user.update({
             where: { id: user.id },
             data: { lastLoginAttemptAt: now },
         });
 
-        // Compare password with the stored hash
+        // パスワードと保存されたハッシュを比較
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (isPasswordValid) {
-            // On successful login, reset failed attempts and lock status
+            // ログイン成功時、失敗した試行回数とロック状態をリセット
             await prisma.user.update({
             where: { id: user.id },
             data: {
@@ -70,13 +74,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             });
             return { id: user.id, email: user.email };
         } else {
-            // On failed login, increment failed attempts
+            // ログイン失敗時、失敗した試行回数を1増やす
             const newFailedAttempts = user.failedLoginAttempts + 1;
             let lockUntil: Date | null = null;
             
             if (newFailedAttempts >= MAX_LOGIN_ATTEMPTS) {
-            // Lock account if attempts exceed the maximum
-            lockUntil = new Date(now.getTime() + LOCKOUT_TIME_MINUTES * 60 * 1000);
+                // 最大試行回数を超えた場合、アカウントをロック
+                lockUntil = new Date(now.getTime() + LOCKOUT_TIME_MINUTES * 60 * 1000);
             }
 
             await prisma.user.update({
@@ -86,8 +90,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 lockUntil: lockUntil,
             },
             });
-            
-            return null; // Authentication failed
+
+            // ロックされた場合もコンソールログのみ
+            if (lockUntil) {
+                console.log(`Account locked for user ${email} after ${MAX_LOGIN_ATTEMPTS} failed attempts. Locked until: ${lockUntil}`);
+            } else {
+                console.log(`Failed login attempt ${newFailedAttempts}/${MAX_LOGIN_ATTEMPTS} for user ${email}`);
+            }
+
+            return null; // 認証に失敗（セキュリティ上、詳細は表示しない）
         }
         },
     }),
@@ -119,7 +130,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             }
           });
         } catch (error) {
-            console.error("Failed to record login history:", error);
+            console.error("ログイン履歴の記録に失敗しました:", error);
         }
       }
     }

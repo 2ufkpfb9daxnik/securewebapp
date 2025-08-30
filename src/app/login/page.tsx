@@ -29,14 +29,37 @@ export default function LoginPage() {
 
       if (result?.error) {
         // authorize関数からスローされた特定のエラーを処理
-        if (result.error.includes("アカウントがロックされています")) {
-          setError(
-            "アカウントがロックされています。しばらくしてから再試行してください。"
-          );
-        } else if (result.error.includes("ログイン試行が多すぎます")) {
-          setError("ログイン試行が多すぎます。しばらく待ってください。");
+        console.log("Login error:", result.error); // デバッグ
+
+        if (
+          result.error.includes("アカウントがロックされています") ||
+          result.error.includes("アカウントがロックされました")
+        ) {
+          setError(result.error);
+        } else if (
+          result.error.includes("ログイン試行が多すぎます") ||
+          result.error.includes("ログイン試行回数が多すぎます")
+        ) {
+          setError(result.error);
+        } else if (result.error === "CredentialsSignin") {
+          // NextAuthの標準エラー（認証失敗）
+          setError("メールアドレスまたはパスワードが正しくありません。");
+        } else if (result.error === "Configuration") {
+          // NextAuth設定エラー
+          setError("メールアドレスまたはパスワードが正しくありません。");
+        } else if (result.error === "AccessDenied") {
+          // アクセス拒否エラー
+          setError("アクセスが拒否されました。");
+        } else if (result.error === "Verification") {
+          // 検証エラー
+          setError("メールアドレスまたはパスワードが正しくありません。");
         } else {
-          setError("メールアドレスか、あるいはパスワードが無効です。");
+          // その他のエラー（日本語のカスタムエラーメッセージのみ表示）
+          if (result.error.match(/[ひらがなカタカナ漢字]/)) {
+            setError(result.error);
+          } else {
+            setError("メールアドレスまたはパスワードが正しくありません。");
+          }
         }
       } else if (result?.ok) {
         // 成功した場合、指定されたページにリダイレクト
